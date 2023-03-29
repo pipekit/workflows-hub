@@ -1,2 +1,4 @@
+[![Pipekit Logo](assets/pipekit-logo.png)](https://pipekit.io)
+
 # workflows-hub
-Place to access, share and reference Pipekit-certified Argo WorkflowTemplates.
+A place to access, share and reference Pipekit-certified Argo WorkflowTemplates, Connectors and Examples.
