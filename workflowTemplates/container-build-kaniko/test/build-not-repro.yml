@@ -1,0 +1,89 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  labels:
+    workflows.argoproj.io/test: "true"
+  name: docker-config
+  namespace: hub
+stringData:
+  docker-config: BAR
+type: Opaque
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: kaniko-build-not-repro-
+  labels:
+    workflows.argoproj.io/test: "true"
+  annotations:
+    workflows.argoproj.io/description: >-
+      Uses Kaniko to build a container image within Kubernetes. Do not pass through the "--reproducible=true" flag.
+    workflows.argoproj.io/maintainer: 'Pipekit Inc'
+    workflows.argoproj.io/maintainer_url: 'https://pipekit.io'
+    workflows.argoproj.io/version: '>= 3.4.6'
+spec:
+  entrypoint: main
+  volumeClaimTemplates:
+  - metadata:
+      name: workdir
+    spec:
+      accessModes: [ "ReadWriteMany" ]
+      storageClassName: nfs
+      resources:
+        requests:
+          storage: 1Gi
+  volumes:
+    - name: docker-config
+      secret:
+        secretName: docker-config
+  templates:
+    - name: main
+      dag:
+        tasks:
+          - name: setup
+            template: setup
+          - name: container-build-kaniko
+            templateRef:
+              name: container-build-kaniko
+              template: main
+            arguments:
+              parameters:
+                - name: dir
+                  value: workdir
+                - name: path
+                  value: "/"
+                - name: boolExportImage
+                  value: false
+                - name: boolUseNewRun
+                  value: true
+                - name: boolMakeReproducible
+                  value: false
+                - name: dockerSecret
+                  value: "docker-config"
+                - name: containerImage
+                  value: "docker-registry.hub.svc.cluster.local:5000/foo"
+                - name: containerTag
+                  value: "v1.0.0"
+            depends: setup
+
+    - name: setup
+      container:
+        image: alpine
+        command:
+          - sh
+          - -c
+          - |
+            cat > /workdir/index.html<< EOF
+            hello world
+            EOF
+            cat > /workdir/Dockerfile<< EOF
+            FROM nginx:stable
+            COPY index.html /usr/share/nginx/html/
+            EOF
+        resources:
+          requests:
+            memory: 64Mi
+            cpu: 0.1
+        volumeMounts:
+        - name: workdir
+          mountPath: /workdir

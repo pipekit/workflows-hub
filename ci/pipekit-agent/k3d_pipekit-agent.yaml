@@ -1,0 +1,175 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    app.kubernetes.io/created-by: pipekit
+  name: hub
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app.kubernetes.io/created-by: pipekit
+  name: pipekit-agent
+  namespace: hub
+secrets:
+- name: pipekit-agent-sa
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/created-by: pipekit
+  name: pipekit-agent-argo-cluster-role
+rules:
+- apiGroups:
+  - argoproj.io
+  resources:
+  - clusterworkflowtemplates
+  - workflows
+  - cronworkflows
+  - workflowtemplates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/created-by: pipekit
+  name: pipekit-agent-k8s-cluster-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  - configmaps
+  - services
+  verbs:
+  - create
+  - delete
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  - pods/log
+  verbs:
+  - get
+  - watch
+  - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/created-by: pipekit
+  name: pipekit-agent-argo-hub-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: pipekit-agent-argo-cluster-role
+subjects:
+- kind: ServiceAccount
+  name: pipekit-agent
+  namespace: hub
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/created-by: pipekit
+  name: pipekit-agent-k8s-hub-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: pipekit-agent-k8s-cluster-role
+subjects:
+- kind: ServiceAccount
+  name: pipekit-agent
+  namespace: hub
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/created-by: pipekit
+  name: pipekit-agent
+  namespace: hub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pipekit-agent
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: pipekit-agent
+      name: pipekit-agent
+    spec:
+      containers:
+      - envFrom:
+        - secretRef:
+            name: pipekit-agent-secret
+        - configMapRef:
+            name: pipekit-agent-config
+        image: pipekit13/pipekit-agent:v0.14.57
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 1
+          httpGet:
+            path: /api/pipekit-agent/metrics/_health
+            port: 8080
+          periodSeconds: 30
+        name: pipekit-agent
+        ports:
+        - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /api/pipekit-agent/metrics/_health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: 500m
+            memory: 128Mi
+          requests:
+            cpu: 200m
+            memory: 64Mi
+      restartPolicy: Always
+      serviceAccountName: pipekit-agent
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  annotations:
+    kubernetes.io/service-account.name: pipekit-agent
+  labels:
+    app.kubernetes.io/created-by: pipekit
+  name: pipekit-agent-sa
+  namespace: hub
+type: kubernetes.io/service-account-token
+---
+apiVersion: v1
+data:
+  IS_IN_KUBE_CLUSTER: "true"
+  LOG_LEVEL: INFO
+  MESSENGER_SERVICE_BASE_URI: https://pipekit.io
+  USERS_SERVICE_BASE_URI: https://pipekit.io
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/created-by: pipekit
+  name: pipekit-agent-config
+  namespace: hub
