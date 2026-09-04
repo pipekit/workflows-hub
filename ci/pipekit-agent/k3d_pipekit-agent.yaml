@@ -123,7 +123,7 @@ spec:
             name: pipekit-agent-secret
         - configMapRef:
             name: pipekit-agent-config
-        image: pipekit13/pipekit-agent:v0.14.57
+        image: pipekit13/pipekit-agent:v7.6.0
         imagePullPolicy: IfNotPresent
         livenessProbe:
           failureThreshold: 1
